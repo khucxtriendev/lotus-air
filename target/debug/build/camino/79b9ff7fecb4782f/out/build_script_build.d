@@ -1,0 +1,5 @@
+/Users/khuctrien/Develop/LotusAir/target/debug/build/camino/79b9ff7fecb4782f/out/build_script_build.d: /Users/khuctrien/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/camino-1.2.6/build.rs
+
+/Users/khuctrien/Develop/LotusAir/target/debug/build/camino/79b9ff7fecb4782f/out/build_script_build: /Users/khuctrien/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/camino-1.2.6/build.rs
+
+/Users/khuctrien/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/camino-1.2.6/build.rs:

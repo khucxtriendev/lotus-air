@@ -1,0 +1,214 @@
+:root {
+  /* Apple Liquid Glass - True Optical Translucent Glass */
+  --lg-bg: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.28) 100%
+  );
+  --lg-border-top: rgba(255, 255, 255, 0.75);
+  --lg-border-side: rgba(255, 255, 255, 0.4);
+  --lg-border-bottom: rgba(255, 255, 255, 0.2);
+  --lg-text-primary: #111113;
+  --lg-text-secondary: rgba(0, 0, 0, 0.65);
+  --lg-btn-bg: rgba(255, 255, 255, 0.35);
+  --lg-btn-hover: rgba(255, 255, 255, 0.5);
+  --lg-btn-border: rgba(255, 255, 255, 0.6);
+  --lg-btn-text: #111113;
+  --lg-blur: 30px;
+  --lg-radius: 36px;
+  --apple-green: #34C759;
+  --lg-shadow: 
+    0 24px 60px rgba(0, 0, 0, 0.22),
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.8),
+    inset 0 -1.5px 2px rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lg-bg: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0.12) 100%
+    );
+    --lg-border-top: rgba(255, 255, 255, 0.45);
+    --lg-border-side: rgba(255, 255, 255, 0.2);
+    --lg-border-bottom: rgba(255, 255, 255, 0.1);
+    --lg-text-primary: #ffffff;
+    --lg-text-secondary: rgba(255, 255, 255, 0.7);
+    --lg-btn-bg: rgba(255, 255, 255, 0.18);
+    --lg-btn-hover: rgba(255, 255, 255, 0.28);
+    --lg-btn-border: rgba(255, 255, 255, 0.3);
+    --lg-btn-text: #ffffff;
+    --lg-shadow: 
+      0 24px 60px rgba(0, 0, 0, 0.45),
+      0 8px 24px rgba(0, 0, 0, 0.25),
+      inset 0 1.5px 2px rgba(255, 255, 255, 0.45),
+      inset 0 -1.5px 2px rgba(0, 0, 0, 0.25);
+  }
+}
+
+/* Khối kính lỏng nhìn xuyên thấu đằng sau (See-Through Translucent Liquid Glass) */
+.apple-liquid-glass-card {
+  position: relative;
+  background: var(--lg-bg);
+  backdrop-filter: blur(var(--lg-blur)) saturate(190%) contrast(105%);
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(190%) contrast(105%);
+  border-radius: var(--lg-radius);
+  border: 1px solid var(--lg-border-side);
+  border-top: 1.5px solid var(--lg-border-top);
+  border-bottom: 1px solid var(--lg-border-bottom);
+  box-shadow: var(--lg-shadow);
+  color: var(--lg-text-primary);
+  overflow: hidden;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Ánh sáng bóng kính khúc xạ chéo (Glossy Specular Reflection) */
+.apple-liquid-glass-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 55%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.15) 40%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  border-radius: var(--lg-radius) var(--lg-radius) 0 0;
+  pointer-events: none;
+}
+
+/* Vệt sáng chéo tăng cảm giác thủy tinh dày */
+.apple-liquid-glass-card::after {
+  content: "";
+  position: absolute;
+  top: -60%;
+  left: -40%;
+  width: 180%;
+  height: 180%;
+  background: radial-gradient(
+    circle at 35% 20%,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0) 50%
+  );
+  pointer-events: none;
+}
+
+/* Nút bấm Glass Button nhìn xuyên thấu */
+.glass-action-btn {
+  width: 100%;
+  height: 48px;
+  background: var(--lg-btn-bg);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid var(--lg-btn-border);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 18px;
+  color: var(--lg-btn-text);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.7);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  z-index: 10;
+}
+
+.glass-action-btn:hover {
+  background: var(--lg-btn-hover);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12), inset 0 1px 2px rgba(255, 255, 255, 0.9);
+  transform: scale(0.99);
+}
+
+.glass-action-btn:active {
+  transform: scale(0.97);
+}
+
+/* Badge L / R */
+.ear-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Icon pin nằm ngang kiểu Apple */
+.battery-pill-icon {
+  width: 26px;
+  height: 12px;
+  border: 1.5px solid var(--apple-green);
+  border-radius: 3.5px;
+  position: relative;
+  padding: 1px;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.battery-pill-icon::after {
+  content: "";
+  position: absolute;
+  right: -3.5px;
+  top: 2.5px;
+  width: 2px;
+  height: 4px;
+  background: var(--apple-green);
+  border-radius: 0 1px 1px 0;
+}
+
+.battery-pill-fill {
+  height: 100%;
+  background: var(--apple-green);
+  border-radius: 1.5px;
+}
+
+/* Animation xoay nhẹ 3D AirPods */
+@keyframes airpod-subtle-spin {
+  0% {
+    transform: perspective(600px) rotateY(0deg) rotateX(4deg);
+  }
+  50% {
+    transform: perspective(600px) rotateY(180deg) rotateX(-2deg);
+  }
+  100% {
+    transform: perspective(600px) rotateY(360deg) rotateX(4deg);
+  }
+}
+
+.rotating-pod {
+  animation: airpod-subtle-spin 8s infinite ease-in-out;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.16));
+}
+
+@keyframes case-float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.floating-case {
+  animation: case-float 4s infinite ease-in-out;
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.15));
+}
