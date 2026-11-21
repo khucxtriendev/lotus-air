@@ -1,11 +1,9 @@
-use lotusair_core::aap::{AAPPacket, AAP_L2CAP_PSM};
-use lotusair_driver::LotusAirDriverBridge;
+use lotusair_core::aap::{AAPCommands, AAPPacket, AAP_L2CAP_PSM};
+use lotusair_driver::{find_connected_airpods, LotusAirDriverBridge};
 use tracing::{debug, info, warn};
 
 pub enum L2capBackend {
     Driver(LotusAirDriverBridge),
-    #[cfg(windows)]
-    WinSock,
     Mock,
 }
 
@@ -18,10 +16,10 @@ impl L2capSocket {
     pub fn new() -> Self {
         let mut driver_bridge = LotusAirDriverBridge::new();
         let backend = if driver_bridge.open().is_ok() {
-            info!("Sử dụng KMDF Driver Backend cho L2CAP PSM 0x1001");
+            info!("Sử dụng LotusAir Driver Bridge cho L2CAP PSM 0x1001");
             L2capBackend::Driver(driver_bridge)
         } else {
-            warn!("Driver không khả dụng, sử dụng chế độ Mock/Direct L2CAP");
+            warn!("Driver Bridge không khả dụng, sử dụng chế độ Mock");
             L2capBackend::Mock
         };
 
@@ -42,33 +40,60 @@ impl L2capSocket {
                 self.is_connected = true;
                 Ok(())
             }
-            #[cfg(windows)]
-            L2capBackend::WinSock => {
-                self.is_connected = true;
-                Ok(())
-            }
             L2capBackend::Mock => {
-                debug!("Giả lập kết nối L2CAP PSM 0x1001 thành công!");
+                debug!("Giả lập kết nối L2CAP PSM 0x1001");
                 self.is_connected = true;
                 Ok(())
             }
         }
     }
 
-    /// Gửi một gói tin AAP tới AirPods
-    pub fn send(&self, packet: &AAPPacket) -> Result<(), String> {
+    /// Đảm bảo kết nối L2CAP đã mở tới AirPods đang kết nối trên Windows
+    pub fn ensure_connected(&mut self) -> Result<(), String> {
+        if self.is_connected {
+            return Ok(());
+        }
+        if let Some(dev) = find_connected_airpods().filter(|d| d.connected) {
+            self.connect(dev.bt_address)
+        } else {
+            Err("Chưa tìm thấy tai nghe AirPods đang kết nối với Windows Bluetooth".into())
+        }
+    }
+
+    /// Gửi một gói tin AAP tới AirPods (tự động kết nối lại nếu kênh L2CAP bị ngắt sau khi đổi tên/ngủ)
+    pub fn send(&mut self, packet: &AAPPacket) -> Result<(), String> {
+        if !self.is_connected {
+            self.ensure_connected()?;
+        }
         let bytes = packet.to_bytes();
-        match &self.backend {
-            L2capBackend::Driver(bridge) => {
-                bridge.send_packet(&bytes).map_err(|e| format!("{:?}", e))
-            }
-            #[cfg(windows)]
-            L2capBackend::WinSock => Ok(()),
+        let first_err = match &self.backend {
+            L2capBackend::Driver(bridge) => match bridge.send_packet(&bytes) {
+                Ok(()) => return Ok(()),
+                Err(e) => format!("{:?}", e),
+            },
             L2capBackend::Mock => {
                 debug!("Mock send AAP packet: Opcode=0x{:04X}", packet.opcode);
-                Ok(())
+                return Ok(());
+            }
+        };
+
+        // Tự động mở lại kênh L2CAP + Handshake và thử gửi lại 1 lần
+        warn!("Gửi AAP lỗi ({}), đang tự động kết nối lại L2CAP...", first_err);
+        self.is_connected = false;
+        if let Some(dev) = find_connected_airpods().filter(|d| d.connected) {
+            if let L2capBackend::Driver(bridge) = &mut self.backend {
+                let _ = bridge.disconnect();
+                let _ = bridge.open();
+            }
+            self.connect(dev.bt_address)?;
+            if let L2capBackend::Driver(bridge) = &self.backend {
+                let _ = bridge.send_packet(&AAPCommands::handshake_init().to_bytes());
+                let _ = bridge.send_packet(&AAPCommands::set_specific_features().to_bytes());
+                let _ = bridge.send_packet(&AAPCommands::subscribe_notifications().to_bytes());
+                return bridge.send_packet(&bytes).map_err(|e| format!("{:?}", e));
             }
         }
+        Err(first_err)
     }
 
     /// Nhận gói tin phản hồi từ AirPods
@@ -82,8 +107,6 @@ impl L2capSocket {
                 let packet = AAPPacket::from_bytes(&bytes).map_err(|e| format!("{:?}", e))?;
                 Ok(Some(packet))
             }
-            #[cfg(windows)]
-            L2capBackend::WinSock => Ok(None),
             L2capBackend::Mock => Ok(None),
         }
     }

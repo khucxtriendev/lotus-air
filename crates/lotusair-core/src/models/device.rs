@@ -14,12 +14,12 @@ pub enum AirPodsModel {
 impl AirPodsModel {
     pub fn from_model_id(id: u16) -> Self {
         match id {
-            0x1920 => Self::AirPods4Anc,
-            0x1820 => Self::AirPods4Standard,
-            0x1420 => Self::AirPodsPro2,
-            0x0E20 => Self::AirPodsPro1,
-            0x1320 => Self::AirPods3,
-            0x0A20 => Self::AirPodsMax,
+            0x1B20 | 0x201B => Self::AirPods4Anc,
+            0x1920 | 0x2019 => Self::AirPods4Standard,
+            0x1420 | 0x2014 | 0x2420 | 0x2024 => Self::AirPodsPro2,
+            0x0E20 | 0x200E => Self::AirPodsPro1,
+            0x1320 | 0x2013 => Self::AirPods3,
+            0x0A20 | 0x200A => Self::AirPodsMax,
             other => Self::Unknown(other),
         }
     }

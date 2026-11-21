@@ -10,34 +10,7 @@
     "frontendDist": "../frontend/dist"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "LotusAir Control Center",
-        "url": "index.html#control",
-        "width": 380,
-        "height": 560,
-        "resizable": false,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "visible": false
-      },
-      {
-        "label": "popup",
-        "title": "LotusAir Connected",
-        "url": "index.html#popup",
-        "width": 380,
-        "height": 410,
-        "resizable": false,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "visible": false
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }

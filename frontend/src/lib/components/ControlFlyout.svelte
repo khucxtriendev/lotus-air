@@ -4,30 +4,35 @@
   import { listen } from '@tauri-apps/api/event';
 
   let deviceState = {
-    name: "Justin's AirPods Pro",
-    connected: true,
-    noise_mode: "adaptive", // 'off' | 'noisecancellation' | 'transparency' | 'adaptive'
+    name: "AirPods",
+    connected: false,
+    noise_mode: "off",
     battery: {
-      left: { level: 100, is_charging: true },
-      right: { level: 83, is_charging: true },
-      case: { level: 100, is_charging: false }
+      left: { level: null as number | null, is_charging: false },
+      right: { level: null as number | null, is_charging: false },
+      case: { level: null as number | null, is_charging: false }
     },
     in_ear: {
-      left_in_ear: true,
-      right_in_ear: true
+      left_in_ear: false,
+      right_in_ear: false
     },
     features: {
-      conversational_awareness: true,
-      personalized_volume: true,
-      adaptive_audio_blend: 45,
-      keep_alive_connection: true,
-      spatial_audio_mode: "headtracked" // 'off' | 'fixed' | 'headtracked'
+      conversational_awareness: false,
+      personalized_volume: false,
+      adaptive_audio_blend: 50,
+      keep_alive_connection: false,
+      spatial_audio_mode: "off"
     }
   };
 
   let isEditingName = false;
   let tempName = deviceState.name;
   let isTakeoverLoading = false;
+  let errorMessage = '';
+
+  function showError(error: unknown) {
+    errorMessage = String(error);
+  }
 
   async function loadState() {
     try {
@@ -37,67 +42,70 @@
         tempName = state.name;
       }
     } catch (e) {
-      console.warn("Chạy ở chế độ demo/preview:", e);
+      showError(e);
     }
   }
 
   async function setMode(modeNum: number) {
     try {
       await invoke('set_noise_mode', { mode: modeNum });
-      if (modeNum === 1) deviceState.noise_mode = 'off';
-      if (modeNum === 2) deviceState.noise_mode = 'noisecancellation';
-      if (modeNum === 3) deviceState.noise_mode = 'transparency';
-      if (modeNum === 4) deviceState.noise_mode = 'adaptive';
+      await loadState();
+      errorMessage = '';
     } catch (e) {
-      console.error(e);
+      showError(e);
     }
   }
 
   async function setAdaptiveBlend(level: number) {
-    deviceState.features.adaptive_audio_blend = level;
     try {
       await invoke('set_adaptive_blend', { level });
+      await loadState();
+      errorMessage = '';
     } catch (e) {
-      console.error(e);
+      showError(e);
     }
   }
 
   async function setSpatialMode(mode: 'off' | 'fixed' | 'headtracked') {
-    deviceState.features.spatial_audio_mode = mode;
     try {
       await invoke('set_spatial_audio_mode', { mode });
+      await loadState();
+      errorMessage = '';
     } catch (e) {
-      console.error(e);
+      showError(e);
     }
   }
 
   async function toggleConversationalAwareness() {
     const nextVal = !deviceState.features.conversational_awareness;
-    deviceState.features.conversational_awareness = nextVal;
     try {
       await invoke('toggle_conversational_awareness', { enabled: nextVal });
+      await loadState();
+      errorMessage = '';
     } catch (e) {
-      console.error(e);
+      showError(e);
     }
   }
 
   async function toggleKeepAlive() {
     const nextVal = !deviceState.features.keep_alive_connection;
-    deviceState.features.keep_alive_connection = nextVal;
     try {
       await invoke('set_keep_alive', { enabled: nextVal });
+      await loadState();
+      errorMessage = '';
     } catch (e) {
-      console.error(e);
+      showError(e);
     }
   }
 
   async function saveNewName() {
     if (tempName.trim().length > 0) {
-      deviceState.name = tempName.trim();
       try {
-        await invoke('rename_device', { newName: deviceState.name });
+        await invoke('rename_device', { newName: tempName.trim() });
+        await loadState();
+        errorMessage = '';
       } catch (e) {
-        console.error(e);
+        showError(e);
       }
     }
     isEditingName = false;
@@ -107,9 +115,10 @@
     isTakeoverLoading = true;
     try {
       await invoke('force_takeover_audio');
-      deviceState.connected = true;
+      await loadState();
+      errorMessage = '';
     } catch (e) {
-      console.error(e);
+      showError(e);
     } finally {
       setTimeout(() => {
         isTakeoverLoading = false;
@@ -140,6 +149,7 @@
     <!-- Header: Tên thiết bị + Đổi tên + Nút xem Popup -->
     <div class="control-header">
       <div class="header-left">
+        <img class="app-logo" src="/lotusair-icon.png" alt="LotusAir" />
         <span class="status-dot" class:connected={deviceState.connected}></span>
         
         {#if isEditingName}
@@ -149,15 +159,14 @@
               bind:value={tempName}
               on:keydown={(e) => e.key === 'Enter' && saveNewName()}
               class="rename-input"
-              autofocus
             />
             <button class="save-name-btn" on:click={saveNewName}>✓</button>
           </div>
         {:else}
-          <div class="title-row" on:click={() => isEditingName = true} title="Nhấp để đổi tên AirPods">
-            <h2 class="device-name">{deviceState.name}</h2>
+          <button class="title-row" on:click={() => isEditingName = true} title="Nhấp để đổi tên AirPods">
+            <span class="device-name">{deviceState.name}</span>
             <svg class="edit-icon-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
-          </div>
+          </button>
         {/if}
       </div>
 
@@ -168,6 +177,13 @@
         </svg>
       </button>
     </div>
+
+    {#if !deviceState.connected}
+      <div class="connection-notice" role="status">Chưa có kết nối điều khiển AirPods. Kết nối âm thanh trong Windows chưa đủ để đổi chế độ.</div>
+    {/if}
+    {#if errorMessage}
+      <div class="error-notice" role="alert">{errorMessage}</div>
+    {/if}
 
     <!-- Quick Action: CƯỚP TAI NGHE TỪ IPHONE / KẾT NỐI TỨC THÌ -->
     <div class="takeover-row">
@@ -192,7 +208,7 @@
           {/if}
         </span>
         <span class="tile-sub" class:active={deviceState.in_ear.left_in_ear}>
-          {deviceState.in_ear.left_in_ear ? 'Đang đeo' : 'Ngoài tai'}
+          {deviceState.connected ? (deviceState.in_ear.left_in_ear ? 'Đang đeo' : 'Ngoài tai') : 'Chưa rõ'}
         </span>
       </div>
 
@@ -205,7 +221,7 @@
           {/if}
         </span>
         <span class="tile-sub" class:active={deviceState.in_ear.right_in_ear}>
-          {deviceState.in_ear.right_in_ear ? 'Đang đeo' : 'Ngoài tai'}
+          {deviceState.connected ? (deviceState.in_ear.right_in_ear ? 'Đang đeo' : 'Ngoài tai') : 'Chưa rõ'}
         </span>
       </div>
 
@@ -217,7 +233,7 @@
             <svg class="inline-block text-emerald-600" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M11.5 2L4 13h6l-2 9 9.5-12h-6.5l2-8z"/></svg>
           {/if}
         </span>
-        <span class="tile-sub active">Sẵn sàng</span>
+        <span class="tile-sub" class:active={deviceState.connected}>{deviceState.connected ? 'Sẵn sàng' : 'Chưa rõ'}</span>
       </div>
     </div>
 
@@ -227,7 +243,7 @@
       <div class="pill-segmented">
         <button
           class="pill-opt"
-          class:selected={deviceState.noise_mode === 'off'}
+          class:selected={deviceState.connected && deviceState.noise_mode === 'off'}
           on:click={() => setMode(1)}
         >
           Tắt
@@ -235,7 +251,7 @@
 
         <button
           class="pill-opt"
-          class:selected={deviceState.noise_mode === 'noisecancellation'}
+          class:selected={deviceState.connected && deviceState.noise_mode === 'noisecancellation'}
           on:click={() => setMode(2)}
         >
           Chống ồn
@@ -243,7 +259,7 @@
 
         <button
           class="pill-opt"
-          class:selected={deviceState.noise_mode === 'transparency'}
+          class:selected={deviceState.connected && deviceState.noise_mode === 'transparency'}
           on:click={() => setMode(3)}
         >
           Xuyên âm
@@ -251,7 +267,7 @@
 
         <button
           class="pill-opt"
-          class:selected={deviceState.noise_mode === 'adaptive'}
+          class:selected={deviceState.connected && deviceState.noise_mode === 'adaptive'}
           on:click={() => setMode(4)}
         >
           Thích ứng
@@ -259,7 +275,7 @@
       </div>
 
       <!-- THANH TRƯỢT TĂNG GIẢM THÍCH ỨNG (CUSTOMIZABLE ADAPTIVE AUDIO SLIDER) -->
-      {#if deviceState.noise_mode === 'adaptive'}
+      {#if deviceState.connected && deviceState.noise_mode === 'adaptive'}
         <div class="adaptive-slider-card">
           <div class="slider-labels">
             <span>Ít tiếng ồn</span>
@@ -286,7 +302,7 @@
       <div class="pill-segmented">
         <button
           class="pill-opt"
-          class:selected={deviceState.features.spatial_audio_mode === 'off'}
+          class:selected={deviceState.connected && deviceState.features.spatial_audio_mode === 'off'}
           on:click={() => setSpatialMode('off')}
         >
           Tắt
@@ -294,7 +310,7 @@
 
         <button
           class="pill-opt"
-          class:selected={deviceState.features.spatial_audio_mode === 'fixed'}
+          class:selected={deviceState.connected && deviceState.features.spatial_audio_mode === 'fixed'}
           on:click={() => setSpatialMode('fixed')}
         >
           Cố định
@@ -302,7 +318,7 @@
 
         <button
           class="pill-opt"
-          class:selected={deviceState.features.spatial_audio_mode === 'headtracked'}
+          class:selected={deviceState.connected && deviceState.features.spatial_audio_mode === 'headtracked'}
           on:click={() => setSpatialMode('headtracked')}
         >
           Theo dõi đầu
@@ -321,13 +337,15 @@
             <div class="item-name">Luôn duy trì kết nối</div>
             <div class="item-desc">Giữ Bluetooth luôn sẵn sàng trong danh sách âm thanh PC</div>
           </div>
-          <div
+          <button
             class="apple-switch"
             class:active={deviceState.features.keep_alive_connection}
             on:click={toggleKeepAlive}
+            aria-label="Luôn duy trì kết nối"
+            aria-pressed={deviceState.features.keep_alive_connection}
           >
             <div class="switch-knob"></div>
-          </div>
+          </button>
         </div>
 
         <!-- Nhận biết cuộc hội thoại -->
@@ -336,13 +354,15 @@
             <div class="item-name">Nhận biết cuộc hội thoại</div>
             <div class="item-desc">Tự động hạ âm lượng khi bạn bắt đầu nói</div>
           </div>
-          <div
+          <button
             class="apple-switch"
             class:active={deviceState.features.conversational_awareness}
             on:click={toggleConversationalAwareness}
+            aria-label="Nhận biết cuộc hội thoại"
+            aria-pressed={deviceState.features.conversational_awareness}
           >
             <div class="switch-knob"></div>
-          </div>
+          </button>
         </div>
 
         <!-- Âm lượng cá nhân hóa -->
@@ -351,13 +371,15 @@
             <div class="item-name">Âm lượng cá nhân hóa</div>
             <div class="item-desc">Điều chỉnh thông minh theo môi trường xung quanh</div>
           </div>
-          <div
+          <button
             class="apple-switch"
             class:active={deviceState.features.personalized_volume}
-            on:click={() => deviceState.features.personalized_volume = !deviceState.features.personalized_volume}
+            title="Chưa có lệnh điều khiển tính năng này"
+            aria-label="Âm lượng cá nhân hóa chưa được hỗ trợ"
+            disabled
           >
             <div class="switch-knob"></div>
-          </div>
+          </button>
         </div>
 
       </div>
@@ -385,11 +407,11 @@
 
   /* Seamless Liquid Glass Container - KHÔNG BORDER */
   .seamless-control-card {
-    width: 360px;
-    height: 550px;
-    background: var(--lg-bg);
-    backdrop-filter: blur(40px) saturate(190%);
-    -webkit-backdrop-filter: blur(40px) saturate(190%);
+    width: 100%;
+    max-width: 360px;
+    height: 100%;
+    max-height: 540px;
+    background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(243,247,251,.96));
     border-radius: 32px;
     /* KHÔNG CÓ BORDER THÔ CỨNG */
     border: none !important;
@@ -403,7 +425,7 @@
     flex-direction: column;
     gap: 14px;
     color: var(--lg-text-primary);
-    overflow: hidden;
+    overflow-y: auto;
     position: relative;
   }
 
@@ -419,6 +441,23 @@
     align-items: center;
     gap: 10px;
   }
+
+  .app-logo {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,.18));
+  }
+
+  .connection-notice, .error-notice {
+    border-radius: 12px;
+    padding: 8px 10px;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .connection-notice { background: #edf3fa; color: #35475d; }
+  .error-notice { background: #fff0ef; color: #a52b23; }
 
   .status-dot {
     width: 9px;
@@ -437,6 +476,10 @@
     align-items: center;
     gap: 6px;
     cursor: pointer;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    text-align: left;
   }
 
   .device-name {
@@ -447,12 +490,12 @@
     color: var(--lg-text-primary);
   }
 
-  .edit-icon {
+  .edit-icon-svg {
     font-size: 11px;
     opacity: 0.5;
     transition: opacity 0.2s;
   }
-  .title-row:hover .edit-icon {
+  .title-row:hover .edit-icon-svg {
     opacity: 1;
   }
 
@@ -716,9 +759,14 @@
     cursor: pointer;
     transition: background 0.25s;
     flex-shrink: 0;
+    border: 0;
   }
   .apple-switch.active {
     background: var(--apple-green);
+  }
+  .apple-switch:disabled {
+    opacity: .45;
+    cursor: not-allowed;
   }
 
   .switch-knob {

@@ -1,4 +1,4 @@
-use lotusair_core::models::{AirPodsBatteryStatus, AirPodsModel, SingleBattery};
+use lotusair_core::models::{AirPodsBatteryStatus, AirPodsModel, InEarStatus, SingleBattery};
 use tracing::debug;
 
 pub const APPLE_COMPANY_ID: u16 = 0x004C;
@@ -8,13 +8,16 @@ pub const CONTINUITY_TYPE_PROXIMITY: u8 = 0x07;
 pub struct AppleBeaconInfo {
     pub model: AirPodsModel,
     pub battery: AirPodsBatteryStatus,
+    pub in_ear: InEarStatus,
     pub lid_open: bool,
+    pub lid_counter: u8,
+    pub rssi: Option<i16>,
 }
 
 pub struct AppleBeaconParser;
 
 impl AppleBeaconParser {
-    /// Phân giải Manufacturer Data phát từ AirPods
+    /// Phân giải Manufacturer Data phát từ AirPods (Continuity Proximity 0x07)
     pub fn parse_manufacturer_data(company_id: u16, data: &[u8]) -> Option<AppleBeaconInfo> {
         if company_id != APPLE_COMPANY_ID || data.len() < 8 {
             return None;
@@ -30,7 +33,7 @@ impl AppleBeaconParser {
             return None;
         }
 
-        // Model ID nằm tại offset 3-4 (little-endian hoặc big-endian tùy phiên bản)
+        // Model ID nằm tại offset 3-4
         let model_id = if data.len() >= 5 {
             u16::from_be_bytes([data[3], data[4]])
         } else {
@@ -38,10 +41,29 @@ impl AppleBeaconParser {
         };
         let model = AirPodsModel::from_model_id(model_id);
 
-        // Byte 6: Nibble battery (High: Left, Low: Right)
+        // Byte 5: Status / In-Ear / Flip flag
+        let status_byte = data.get(5).copied().unwrap_or(0);
+        let is_flipped = (status_byte & 0x20) == 0;
+        let primary_in_ear = (status_byte & 0x02) != 0 || (status_byte & 0x01) != 0;
+        let secondary_in_ear = (status_byte & 0x08) != 0 || (status_byte & 0x01) != 0;
+        let in_ear = if is_flipped {
+            InEarStatus {
+                left_in_ear: secondary_in_ear,
+                right_in_ear: primary_in_ear,
+            }
+        } else {
+            InEarStatus {
+                left_in_ear: primary_in_ear,
+                right_in_ear: secondary_in_ear,
+            }
+        };
+
+        // Byte 6: Nibble battery
         let (left_raw, right_raw) = if data.len() > 6 {
             let b = data[6];
-            ((b >> 4) & 0x0F, b & 0x0F)
+            let hi = (b >> 4) & 0x0F;
+            let lo = b & 0x0F;
+            if is_flipped { (lo, hi) } else { (hi, lo) }
         } else {
             (0x0F, 0x0F)
         };
@@ -54,15 +76,18 @@ impl AppleBeaconParser {
             (0x0F, 0)
         };
 
-        let left_charging = (charging_byte & 0x10) != 0;
-        let right_charging = (charging_byte & 0x20) != 0;
+        let (left_charging, right_charging) = if is_flipped {
+            ((charging_byte & 0x20) != 0, (charging_byte & 0x10) != 0)
+        } else {
+            ((charging_byte & 0x10) != 0, (charging_byte & 0x20) != 0)
+        };
         let case_charging = (charging_byte & 0x40) != 0;
 
         let decode_nibble = |val: u8| -> Option<u8> {
             match val {
                 0..=9 => Some(val * 10 + 5), // 5%, 15%, ... 95%
                 0x0A => Some(100),           // 100%
-                _ => None,                  // Đang ngắt kết nối / không rõ
+                _ => None,                   // Không rõ / hộp sạc đang đóng
             }
         };
 
@@ -81,14 +106,25 @@ impl AppleBeaconParser {
             },
         };
 
-        let lid_open = (charging_byte & 0x80) != 0;
+        // Byte 8 (Apple Continuity Proximity 0x07):
+        // - Bit 3 (0x08): 0 = nắp hộp ĐANG MỞ, 1 = nắp hộp ĐANG ĐÓNG
+        // - Bits 0..2 (0x07): bộ đếm số lần đóng/mở nắp hộp (tăng mỗi khi mở nắp)
+        let lid_byte = data.get(8).copied().unwrap_or(0x08);
+        let lid_counter = lid_byte & 0x07;
+        let lid_open = (lid_byte & 0x08) == 0 && battery.case.level.is_some();
 
-        debug!("Phân tích Apple BLE beacon thành công: {:?}, model: {:?}", battery, model);
+        debug!(
+            "Phân tích Apple BLE beacon thành công: {:?}, in_ear: {:?}, lid_open: {} (counter={}), model: {:?}",
+            battery, in_ear, lid_open, lid_counter, model
+        );
 
         Some(AppleBeaconInfo {
             model,
             battery,
+            in_ear,
             lid_open,
+            lid_counter,
+            rssi: None,
         })
     }
 }

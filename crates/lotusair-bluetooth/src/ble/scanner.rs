@@ -1,5 +1,6 @@
-use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
+use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral, ScanFilter};
 use btleplug::platform::Manager;
+use futures::StreamExt;
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};
 use crate::ble::beacon::{AppleBeaconInfo, AppleBeaconParser, APPLE_COMPANY_ID};
@@ -10,15 +11,16 @@ pub struct AirPodsBleScanner {
 
 impl AirPodsBleScanner {
     pub fn new() -> (Self, broadcast::Receiver<AppleBeaconInfo>) {
-        let (tx, rx) = broadcast::channel(32);
+        let (tx, rx) = broadcast::channel(64);
         (Self { event_tx: tx }, rx)
     }
 
-    /// Chạy tiến trình quét BLE background để theo dõi pin AirPods từ quảng bá Continuity
+    /// Chạy tiến trình nghe sự kiện BLE thời gian thực (ManufacturerDataAdvertisement)
+    /// để bắt tức thì khoảnh khắc mở nắp hộp / rút tai nghe khỏi hộp giống hệt iPhone.
     pub async fn start_scanning(&self) {
         let tx = self.event_tx.clone();
         tokio::spawn(async move {
-            info!("Bắt đầu quét Bluetooth Low Energy cho AirPods...");
+            info!("Bắt đầu lắng nghe BLE Continuity (0x07) thời gian thực cho AirPods...");
             let manager = match Manager::new().await {
                 Ok(m) => m,
                 Err(e) => {
@@ -35,22 +37,42 @@ impl AirPodsBleScanner {
                 }
             };
 
-            let central = &adapters[0];
+            let central = adapters.into_iter().next().unwrap();
+            let mut events = match central.events().await {
+                Ok(stream) => stream,
+                Err(e) => {
+                    error!("Không đăng ký được BLE event stream: {:?}", e);
+                    return;
+                }
+            };
+
             if let Err(e) = central.start_scan(ScanFilter::default()).await {
                 error!("Lỗi khi bắt đầu BLE scan: {:?}", e);
                 return;
             }
 
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-                if let Ok(peripherals) = central.peripherals().await {
-                    for peripheral in peripherals {
-                        if let Ok(Some(props)) = peripheral.properties().await {
-                            if let Some(data) = props.manufacturer_data.get(&APPLE_COMPANY_ID) {
-                                if let Some(info) = AppleBeaconParser::parse_manufacturer_data(APPLE_COMPANY_ID, data) {
-                                    let _ = tx.send(info);
+            while let Some(event) = events.next().await {
+                if let CentralEvent::ManufacturerDataAdvertisement {
+                    id,
+                    manufacturer_data,
+                } = event
+                {
+                    if let Some(data) = manufacturer_data.get(&APPLE_COMPANY_ID) {
+                        if let Some(mut beacon) =
+                            AppleBeaconParser::parse_manufacturer_data(APPLE_COMPANY_ID, data)
+                        {
+                            let rssi = match central.peripheral(&id).await {
+                                Ok(p) => p.properties().await.ok().flatten().and_then(|pr| pr.rssi),
+                                Err(_) => None,
+                            };
+                            // Chỉ nhận AirPods ở gần laptop (RSSI >= -78 dBm) để tránh bắt nhầm tai nghe phòng bên
+                            if let Some(dbm) = rssi {
+                                if dbm < -78 {
+                                    continue;
                                 }
                             }
+                            beacon.rssi = rssi;
+                            let _ = tx.send(beacon);
                         }
                     }
                 }
